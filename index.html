@@ -66,7 +66,7 @@
 </head>
 <body class="bg-gray-50 pb-24">
 
-    <div onclick="abrirResumen()" class="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white p-4 rounded-full shadow-2xl cursor-pointer hover:scale-110 transition-transform flex items-center gap-3">
+    <div onclick="abrirCarritoUsuario()" class="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white p-4 rounded-full shadow-2xl cursor-pointer hover:scale-110 transition-transform flex items-center gap-3">
         <i class="fa-solid fa-cart-shopping text-xl"></i>
         <span id="cart-count" class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full absolute -top-1 -right-1 border-2 border-indigo-600">0</span>
     </div>
@@ -77,12 +77,12 @@
                 <button onclick="cerrarResumen()" class="text-gray-500 font-bold flex items-center gap-2 hover:text-indigo-600">
                     <i class="fa-solid fa-arrow-left"></i> Volver
                 </button>
-                <h2 class="text-2xl font-black text-gray-900">TU PEDIDO</h2>
+                <h2 id="titulo-pagina" class="text-2xl font-black text-gray-900">TU PEDIDO</h2>
             </div>
 
             <div id="aviso-vendedor" class="hidden bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-r shadow-sm">
-                <p class="font-bold flex items-center gap-2"><i class="fa-solid fa-eye"></i> VISTA DE VENDEDOR</p>
-                <p class="text-sm">Estás viendo el resumen gráfico de un pedido recibido por WhatsApp.</p>
+                <p class="font-bold flex items-center gap-2"><i class="fa-solid fa-lock"></i> MODO LECTURA (VENDEDOR)</p>
+                <p class="text-sm">Estás viendo un pedido recibido. No puedes editar esta lista porque pertenece al cliente.</p>
             </div>
 
             <div id="checkout-items" class="space-y-4 mb-8"></div>
@@ -99,7 +99,7 @@
                 <input type="text" id="cliente-nombre" class="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none" placeholder="Tu Nombre">
                 <input type="text" id="cliente-direccion" class="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 outline-none" placeholder="Dirección de Entrega">
                 
-                <button onclick="confirmarPedidoWhatsApp()" class="w-full bg-[#25D366] hover:bg-[#128C7E] text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all mt-4 shadow-lg shadow-green-200">
+                <button id="btn-enviar-pedido" onclick="confirmarPedidoWhatsApp()" class="w-full bg-[#25D366] hover:bg-[#128C7E] text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all mt-4 shadow-lg shadow-green-200">
                     <i class="fa-brands fa-whatsapp text-2xl"></i> CONFIRMAR PEDIDO
                 </button>
             </div>
@@ -131,9 +131,10 @@
     <div id="productos" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 max-w-7xl mx-auto px-4"></div>
 
     <script>
-        let carrito = [];
-        // Variable Global para guardar el catálogo completo y poder buscar imágenes después
+        let carrito = []; // Carrito local del usuario
+        let itemsVistaVendedor = []; // Items que vienen por link (separados)
         window.catalogoGlobal = []; 
+        let modoVendedorActivo = false; // Bandera para saber en qué modo estamos
 
         const ID_HOJA = '1Cu5wkwCx__JNME4vURExoTfc9eYrDZ1y0pcPqmVhIG8';
         const URL_DATOS = `https://docs.google.com/spreadsheets/d/${ID_HOJA}/gviz/tq?tqx=out:json`;
@@ -152,9 +153,7 @@
                 }));
 
                 renderizarCatalogo(window.catalogoGlobal);
-                
-                // IMPORTANTE: Verificar URL DESPUÉS de cargar el catálogo para poder encontrar las imágenes
-                verificarUrlPedido(); 
+                verificarUrlPedido(); // Verifica link después de cargar datos
             });
         }
 
@@ -167,8 +166,8 @@
             productos.forEach(item => {
                 categorias.add(item.cat);
                 
-                // Link para el botón de compra directa
-                const textoDirecto = encodeURIComponent(`¡Hola! 👋 Me interesa comprar directamente:\n\n📌 *${item.nombre}*\n💰 *S/ ${item.precio}*`);
+                // CORRECCIÓN 1: Botón de WhatsApp con link de IMAGEN incluido
+                const textoDirecto = encodeURIComponent(`¡Hola! 👋 Me interesa comprar directamente:\n\n📌 *${item.nombre}*\n💰 *S/ ${item.precio}*\n🖼️ *Foto:* ${item.img1}`);
                 const linkDirecto = `https://wa.me/51970338838?text=${textoDirecto}`;
 
                 const card = document.createElement('div');
@@ -200,7 +199,6 @@
                 contenedor.appendChild(card);
             });
 
-            // Solo agrega categorías si están vacías (para evitar duplicados al recargar)
             if(divFiltros.children.length === 1) {
                 categorias.forEach(cat => {
                     divFiltros.innerHTML += `<button onclick="filtrar('${cat.toLowerCase()}')" class="filter-btn bg-white text-gray-500 border border-gray-200 px-5 py-2 rounded-full text-xs font-bold uppercase hover:bg-gray-100 transition-all">${cat}</button>`;
@@ -208,11 +206,11 @@
             }
         }
 
+        // --- LÓGICA DEL CARRITO (USUARIO) ---
         function agregarAlCarrito(nombre, precio, img, btn) {
             carrito.push({ nombre, precio, img });
             actualizarContador();
             
-            // Animación botón
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-check"></i>';
             btn.classList.replace('bg-gray-900', 'bg-green-600');
@@ -228,30 +226,89 @@
             icon.classList.add('scale-110'); setTimeout(() => icon.classList.remove('scale-110'), 200);
         }
 
-        function abrirResumen() {
+        function abrirCarritoUsuario() {
             if (carrito.length === 0) return alert("Tu carrito está vacío 🛒");
-            renderizarResumen();
+            modoVendedorActivo = false; // Estamos en modo usuario
+            configurarVistaCheckout();
+            renderizarItems(carrito, true); // True = editable
             document.getElementById('checkout-page').style.display = 'block';
             document.body.style.overflow = 'hidden';
         }
 
-        function cerrarResumen() {
-            document.getElementById('checkout-page').style.display = 'none';
-            document.body.style.overflow = 'auto';
-            // Si venimos de un link de vendedor, limpiar URL al salir
-            if(document.getElementById('aviso-vendedor').classList.contains('flex')) {
-                window.history.pushState({}, document.title, window.location.pathname);
-                location.reload();
+        // --- LÓGICA DE VISTA VENDEDOR (SOLO LECTURA) ---
+        function verificarUrlPedido() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('pedido')) {
+                const rawData = params.get('pedido');
+                const clienteName = params.get('cliente');
+
+                // 1. Parseamos los items a una variable SEPARADA
+                itemsVistaVendedor = rawData.split(';;').map(i => {
+                    const [nom, pre] = i.split('|');
+                    const prodOriginal = window.catalogoGlobal.find(p => p.nombre === nom);
+                    return { 
+                        nombre: nom, 
+                        precio: parseFloat(pre), 
+                        img: prodOriginal ? prodOriginal.img1 : 'https://via.placeholder.com/100?text=No+Img' 
+                    };
+                });
+
+                // 2. Activamos la interfaz en MODO VENDEDOR
+                modoVendedorActivo = true;
+                
+                // Configuración Visual
+                configurarVistaCheckout();
+                
+                // Llenamos datos (Bloqueados)
+                document.getElementById('cliente-nombre').value = clienteName;
+                document.getElementById('cliente-direccion').value = "Dirección en WhatsApp";
+                
+                // Renderizamos items (False = No editable)
+                renderizarItems(itemsVistaVendedor, false); 
+                
+                // Mostramos pantalla
+                document.getElementById('checkout-page').style.display = 'block';
+                document.body.style.overflow = 'hidden';
             }
         }
 
-        function renderizarResumen() {
+        // --- RENDERIZADO COMÚN ---
+        function configurarVistaCheckout() {
+            const aviso = document.getElementById('aviso-vendedor');
+            const inputs = document.querySelectorAll('#form-datos input');
+            const btnEnviar = document.getElementById('btn-enviar-pedido');
+            const titulo = document.getElementById('titulo-pagina');
+
+            if (modoVendedorActivo) {
+                // Modo Vendedor (Lectura)
+                titulo.innerText = "RESUMEN DEL CLIENTE";
+                aviso.classList.remove('hidden');
+                aviso.classList.add('block');
+                inputs.forEach(i => i.disabled = true); // Bloquear inputs
+                btnEnviar.style.display = 'none'; // Ocultar botón enviar
+            } else {
+                // Modo Usuario (Carrito)
+                titulo.innerText = "TU PEDIDO";
+                aviso.classList.add('hidden');
+                aviso.classList.remove('block');
+                inputs.forEach(i => { i.disabled = false; i.value = ''; }); // Limpiar y desbloquear
+                btnEnviar.style.display = 'flex'; // Mostrar botón enviar
+            }
+        }
+
+        function renderizarItems(lista, esEditable) {
             const listado = document.getElementById('checkout-items');
             listado.innerHTML = '';
             let total = 0;
 
-            carrito.forEach((prod, index) => {
+            lista.forEach((prod, index) => {
                 total += prod.precio;
+                
+                // Si es editable mostramos el botón de borrar, si no, nada
+                const botonBorrar = esEditable 
+                    ? `<button onclick="eliminarItem(${index})" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-full hover:bg-red-100"><i class="fa-solid fa-trash text-xs"></i></button>` 
+                    : ``;
+
                 listado.innerHTML += `
                     <div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                         <img src="${prod.img}" class="w-16 h-16 object-contain rounded bg-gray-50 border">
@@ -259,9 +316,7 @@
                             <p class="font-bold text-gray-800 text-sm leading-tight">${prod.nombre}</p>
                             <p class="text-indigo-600 font-bold text-sm">S/ ${prod.precio.toFixed(2)}</p>
                         </div>
-                        <button onclick="eliminarItem(${index})" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-full hover:bg-red-100">
-                            <i class="fa-solid fa-trash text-xs"></i>
-                        </button>
+                        ${botonBorrar}
                     </div>
                 `;
             });
@@ -269,20 +324,34 @@
         }
 
         function eliminarItem(index) {
-            carrito.splice(index, 1);
-            actualizarContador();
-            renderizarResumen();
-            if(carrito.length === 0) cerrarResumen();
+            if (!modoVendedorActivo) {
+                carrito.splice(index, 1);
+                actualizarContador();
+                renderizarItems(carrito, true);
+                if(carrito.length === 0) cerrarResumen();
+            }
         }
 
-        // --- SISTEMA DE LINK DE PEDIDO ---
+        function cerrarResumen() {
+            document.getElementById('checkout-page').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            // Si salimos del modo vendedor, limpiamos la URL
+            if (modoVendedorActivo) {
+                window.history.pushState({}, document.title, window.location.pathname);
+                modoVendedorActivo = false;
+                // No recargamos la página entera, solo reseteamos estado visual si es necesario
+                location.reload(); 
+            }
+        }
+
         function confirmarPedidoWhatsApp() {
+            if (modoVendedorActivo) return; // Seguridad extra
+
             const nombre = document.getElementById('cliente-nombre').value.trim();
             const direccion = document.getElementById('cliente-direccion').value.trim();
 
             if (!nombre || !direccion) return alert("Por favor completa tu Nombre y Dirección");
 
-            // Solo enviamos Nombre|Precio. La imagen la recuperamos en el otro lado.
             const dataPedido = carrito.map(p => `${p.nombre}|${p.precio}`).join(';;');
             const baseUrl = window.location.href.split('?')[0];
             const linkVisual = `${baseUrl}?pedido=${encodeURIComponent(dataPedido)}&cliente=${encodeURIComponent(nombre)}`;
@@ -295,40 +364,7 @@
             window.open(`https://wa.me/51970338838?text=${encodeURIComponent(mensaje)}`, '_blank');
         }
 
-        function verificarUrlPedido() {
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('pedido')) {
-                const rawData = params.get('pedido');
-                const clienteName = params.get('cliente');
-
-                // Reconstruir carrito buscando la imagen REAL en catalogoGlobal
-                const items = rawData.split(';;');
-                carrito = items.map(i => {
-                    const [nom, pre] = i.split('|');
-                    
-                    // BUSCAR LA IMAGEN CORRECTA
-                    const productoOriginal = window.catalogoGlobal.find(p => p.nombre === nom);
-                    const imagenReal = productoOriginal ? productoOriginal.img1 : 'https://via.placeholder.com/100?text=No+Img';
-
-                    return { nombre: nom, precio: parseFloat(pre), img: imagenReal };
-                });
-
-                // Activar modo vendedor
-                const aviso = document.getElementById('aviso-vendedor');
-                aviso.classList.remove('hidden');
-                aviso.classList.add('block');
-                
-                document.getElementById('cliente-nombre').value = clienteName;
-                document.getElementById('cliente-direccion').value = "Ver dirección en WhatsApp";
-                document.getElementById('form-datos').style.opacity = '0.5'; // Visualmente desactivado
-                document.getElementById('form-datos').style.pointerEvents = 'none'; // No editable
-                
-                actualizarContador();
-                abrirResumen();
-            }
-        }
-
-        // Funciones auxiliares (Filtros, Modal, etc)
+        // Filtros y Modal
         document.getElementById('buscador').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             document.querySelectorAll('.product-card').forEach(card => {
