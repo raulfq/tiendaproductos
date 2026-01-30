@@ -326,26 +326,39 @@
         }
 
         function confirmarPedidoWhatsApp() {
-            if (modoVendedorActivo) return;
+            if (modoVendedorActivo) return; // Seguridad extra
+
             const nombre = document.getElementById('cliente-nombre').value.trim();
             const direccion = document.getElementById('cliente-direccion').value.trim();
+
             if (!nombre || !direccion) return alert("Por favor completa tu Nombre y Dirección");
+
+            // Preparar link visual
             const dataPedido = carrito.map(p => `${p.nombre}|${p.precio}`).join(';;');
             const baseUrl = window.location.href.split('?')[0];
             const linkVisual = `${baseUrl}?pedido=${encodeURIComponent(dataPedido)}&cliente=${encodeURIComponent(nombre)}`;
-            let mensaje = `*NUEVO PEDIDO - KLICK PRO* 🛍️\n\n👤 *Cliente:* ${nombre}\n📍 *Dirección:* ${direccion}\n`;
-            mensaje += `--------------------------------\n🔗 *VER RESUMEN GRÁFICO (CLICK AQUÍ):* \n${linkVisual}\n--------------------------------\n\n`;
-            carrito.forEach((p, i) => mensaje += `✅ *${i + 1}.* ${p.nombre} (S/ ${p.precio.toFixed(2)})\n`);
-            mensaje += `\n⭐ *TOTAL: S/ ${document.getElementById('checkout-total').innerText}*`;
+
+            // --- CONSTRUCCIÓN DEL MENSAJE ESTILIZADO ---
+            let mensaje = `*NUEVO PEDIDO - CATALOGO PRO* 🛍️\n\n`;
+            mensaje += `👤 *Cliente:* ${nombre}\n`;
+            mensaje += `📍 *Dirección:* ${direccion}\n`;
+            mensaje += `--------------------------------\n`;
+            mensaje += `🔗 *VER RESUMEN GRÁFICO (CLICK AQUÍ):* \n`;
+            mensaje += `${linkVisual}\n`;
+            mensaje += `--------------------------------\n\n`;
+
+            // Listado de productos
+            carrito.forEach((p, i) => {
+                mensaje += `✅ *${i + 1}.* ${p.nombre} (S/ ${p.precio.toFixed(2)})\n`;
+            });
+
+            // Total final
+            const totalTexto = document.getElementById('checkout-total').innerText;
+            mensaje += `\n⭐ *TOTAL: S/ ${totalTexto}*`;
+
+            // Abrir WhatsApp
             window.open(`https://wa.me/51970338838?text=${encodeURIComponent(mensaje)}`, '_blank');
         }
-
-        document.getElementById('buscador').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            document.querySelectorAll('.product-card').forEach(card => {
-                card.classList.toggle('hidden-item', !card.getAttribute('data-nombre').includes(term));
-            });
-        });
 
         function filtrar(cat) {
             document.querySelectorAll('.filter-btn').forEach(b => b.className="filter-btn bg-white text-gray-500 border border-gray-200 px-5 py-2 rounded-full text-xs font-bold uppercase hover:bg-gray-100 transition-all");
