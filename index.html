@@ -131,10 +131,10 @@
     <div id="productos" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 max-w-7xl mx-auto px-4"></div>
 
     <script>
-        let carrito = []; // Carrito local del usuario
-        let itemsVistaVendedor = []; // Items que vienen por link (separados)
+        let carrito = [];
+        let itemsVistaVendedor = [];
         window.catalogoGlobal = []; 
-        let modoVendedorActivo = false; // Bandera para saber en qué modo estamos
+        let modoVendedorActivo = false;
 
         const ID_HOJA = '1Cu5wkwCx__JNME4vURExoTfc9eYrDZ1y0pcPqmVhIG8';
         const URL_DATOS = `https://docs.google.com/spreadsheets/d/${ID_HOJA}/gviz/tq?tqx=out:json`;
@@ -144,16 +144,20 @@
         function cargarProductos() {
             fetch(URL_DATOS).then(res => res.text()).then(data => {
                 const json = JSON.parse(data.substr(47).slice(0, -2));
-                window.catalogoGlobal = json.table.rows.map(fila => ({
-                    nombre: fila.c[0] ? fila.c[0].v : "Sin nombre",
-                    precio: fila.c[1] ? parseFloat(fila.c[1].v) : 0,
-                    img1: fila.c[2] ? fila.c[2].v : "https://via.placeholder.com/300",
-                    cat: fila.c[3] ? fila.c[3].v : "General",
-                    img2: (fila.c[4] && fila.c[4].v) ? fila.c[4].v : (fila.c[2] ? fila.c[2].v : "")
-                }));
+                // ADECUACIÓN: Filtramos solo los "Disponibles" y ajustamos índices de columnas
+                window.catalogoGlobal = json.table.rows
+                    .filter(fila => fila.c[7] && fila.c[7].v === "Disponible")
+                    .map(fila => ({
+                        nombre: fila.c[1] ? fila.c[1].v : "Sin nombre",
+                        precio: fila.c[2] ? parseFloat(fila.c[2].v) : 0,
+                        talla: fila.c[3] ? fila.c[3].v : "S/T",
+                        img1: fila.c[4] ? fila.c[4].v : "https://via.placeholder.com/300",
+                        cat: fila.c[5] ? fila.c[5].v : "General",
+                        img2: (fila.c[6] && fila.c[6].v) ? fila.c[6].v : (fila.c[4] ? fila.c[4].v : "")
+                    }));
 
                 renderizarCatalogo(window.catalogoGlobal);
-                verificarUrlPedido(); // Verifica link después de cargar datos
+                verificarUrlPedido();
             });
         }
 
@@ -166,8 +170,7 @@
             productos.forEach(item => {
                 categorias.add(item.cat);
                 
-                // CORRECCIÓN 1: Botón de WhatsApp con link de IMAGEN incluido
-                const textoDirecto = encodeURIComponent(`¡Hola! 👋 Me interesa comprar directamente:\n\n📌 *${item.nombre}*\n💰 *S/ ${item.precio}*\n🖼️ *Foto:* ${item.img1}`);
+                const textoDirecto = encodeURIComponent(`¡Hola! 👋 Me interesa comprar directamente:\n\n📌 *${item.nombre}*\n📏 *Talla:* ${item.talla}\n💰 *S/ ${item.precio}*\n🖼️ *Foto:* ${item.img1}`);
                 const linkDirecto = `https://wa.me/51970338838?text=${textoDirecto}`;
 
                 const card = document.createElement('div');
@@ -179,7 +182,10 @@
                     <div class="img-container" onclick="abrirModal('${item.img1}', '${item.img2}')">
                         <img src="${item.img1}" class="product-img img-primary">
                         <img src="${item.img2}" class="product-img img-secondary">
-                        <span class="absolute top-3 left-3 bg-white/90 backdrop-blur text-gray-800 text-[10px] font-bold px-2 py-1 rounded-full uppercase border shadow-sm">${item.cat}</span>
+                        <div class="absolute top-3 left-3 flex flex-col gap-1">
+                            <span class="bg-white/90 backdrop-blur text-gray-800 text-[10px] font-bold px-2 py-1 rounded-full uppercase border shadow-sm w-fit">${item.cat}</span>
+                            <span class="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase shadow-sm w-fit">Talla: ${item.talla}</span>
+                        </div>
                     </div>
                     <div class="p-3 flex flex-col flex-grow text-center">
                         <h2 class="font-bold text-gray-800 text-sm leading-tight h-10 overflow-hidden mb-1">${item.nombre}</h2>
@@ -191,7 +197,7 @@
                             </a>
                             <button onclick="agregarAlCarrito('${item.nombre}', ${item.precio}, '${item.img1}', this)" 
                                class="bg-gray-900 text-white py-2 px-3 rounded-lg flex-[3] font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 transition-colors">
-                               Añadir <i class="fa-solid fa-cart-plus"></i>
+                                Añadir <i class="fa-solid fa-cart-plus"></i>
                             </button>
                         </div>
                     </div>
@@ -206,11 +212,9 @@
             }
         }
 
-        // --- LÓGICA DEL CARRITO (USUARIO) ---
         function agregarAlCarrito(nombre, precio, img, btn) {
             carrito.push({ nombre, precio, img });
             actualizarContador();
-            
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-check"></i>';
             btn.classList.replace('bg-gray-900', 'bg-green-600');
@@ -228,21 +232,18 @@
 
         function abrirCarritoUsuario() {
             if (carrito.length === 0) return alert("Tu carrito está vacío 🛒");
-            modoVendedorActivo = false; // Estamos en modo usuario
+            modoVendedorActivo = false;
             configurarVistaCheckout();
-            renderizarItems(carrito, true); // True = editable
+            renderizarItems(carrito, true);
             document.getElementById('checkout-page').style.display = 'block';
             document.body.style.overflow = 'hidden';
         }
 
-        // --- LÓGICA DE VISTA VENDEDOR (SOLO LECTURA) ---
         function verificarUrlPedido() {
             const params = new URLSearchParams(window.location.search);
             if (params.has('pedido')) {
                 const rawData = params.get('pedido');
                 const clienteName = params.get('cliente');
-
-                // 1. Parseamos los items a una variable SEPARADA
                 itemsVistaVendedor = rawData.split(';;').map(i => {
                     const [nom, pre] = i.split('|');
                     const prodOriginal = window.catalogoGlobal.find(p => p.nombre === nom);
@@ -252,47 +253,33 @@
                         img: prodOriginal ? prodOriginal.img1 : 'https://via.placeholder.com/100?text=No+Img' 
                     };
                 });
-
-                // 2. Activamos la interfaz en MODO VENDEDOR
                 modoVendedorActivo = true;
-                
-                // Configuración Visual
                 configurarVistaCheckout();
-                
-                // Llenamos datos (Bloqueados)
                 document.getElementById('cliente-nombre').value = clienteName;
                 document.getElementById('cliente-direccion').value = "Dirección en WhatsApp";
-                
-                // Renderizamos items (False = No editable)
                 renderizarItems(itemsVistaVendedor, false); 
-                
-                // Mostramos pantalla
                 document.getElementById('checkout-page').style.display = 'block';
                 document.body.style.overflow = 'hidden';
             }
         }
 
-        // --- RENDERIZADO COMÚN ---
         function configurarVistaCheckout() {
             const aviso = document.getElementById('aviso-vendedor');
             const inputs = document.querySelectorAll('#form-datos input');
             const btnEnviar = document.getElementById('btn-enviar-pedido');
             const titulo = document.getElementById('titulo-pagina');
-
             if (modoVendedorActivo) {
-                // Modo Vendedor (Lectura)
                 titulo.innerText = "RESUMEN DEL CLIENTE";
                 aviso.classList.remove('hidden');
                 aviso.classList.add('block');
-                inputs.forEach(i => i.disabled = true); // Bloquear inputs
-                btnEnviar.style.display = 'none'; // Ocultar botón enviar
+                inputs.forEach(i => i.disabled = true);
+                btnEnviar.style.display = 'none';
             } else {
-                // Modo Usuario (Carrito)
                 titulo.innerText = "TU PEDIDO";
                 aviso.classList.add('hidden');
                 aviso.classList.remove('block');
-                inputs.forEach(i => { i.disabled = false; i.value = ''; }); // Limpiar y desbloquear
-                btnEnviar.style.display = 'flex'; // Mostrar botón enviar
+                inputs.forEach(i => { i.disabled = false; i.value = ''; });
+                btnEnviar.style.display = 'flex';
             }
         }
 
@@ -300,15 +287,11 @@
             const listado = document.getElementById('checkout-items');
             listado.innerHTML = '';
             let total = 0;
-
             lista.forEach((prod, index) => {
                 total += prod.precio;
-                
-                // Si es editable mostramos el botón de borrar, si no, nada
                 const botonBorrar = esEditable 
                     ? `<button onclick="eliminarItem(${index})" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-full hover:bg-red-100"><i class="fa-solid fa-trash text-xs"></i></button>` 
                     : ``;
-
                 listado.innerHTML += `
                     <div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                         <img src="${prod.img}" class="w-16 h-16 object-contain rounded bg-gray-50 border">
@@ -335,36 +318,28 @@
         function cerrarResumen() {
             document.getElementById('checkout-page').style.display = 'none';
             document.body.style.overflow = 'auto';
-            // Si salimos del modo vendedor, limpiamos la URL
             if (modoVendedorActivo) {
                 window.history.pushState({}, document.title, window.location.pathname);
                 modoVendedorActivo = false;
-                // No recargamos la página entera, solo reseteamos estado visual si es necesario
                 location.reload(); 
             }
         }
 
         function confirmarPedidoWhatsApp() {
-            if (modoVendedorActivo) return; // Seguridad extra
-
+            if (modoVendedorActivo) return;
             const nombre = document.getElementById('cliente-nombre').value.trim();
             const direccion = document.getElementById('cliente-direccion').value.trim();
-
             if (!nombre || !direccion) return alert("Por favor completa tu Nombre y Dirección");
-
             const dataPedido = carrito.map(p => `${p.nombre}|${p.precio}`).join(';;');
             const baseUrl = window.location.href.split('?')[0];
             const linkVisual = `${baseUrl}?pedido=${encodeURIComponent(dataPedido)}&cliente=${encodeURIComponent(nombre)}`;
-
             let mensaje = `*NUEVO PEDIDO - KLICK PRO* 🛍️\n\n👤 *Cliente:* ${nombre}\n📍 *Dirección:* ${direccion}\n`;
             mensaje += `--------------------------------\n🔗 *VER RESUMEN GRÁFICO (CLICK AQUÍ):* \n${linkVisual}\n--------------------------------\n\n`;
             carrito.forEach((p, i) => mensaje += `✅ *${i + 1}.* ${p.nombre} (S/ ${p.precio.toFixed(2)})\n`);
             mensaje += `\n⭐ *TOTAL: S/ ${document.getElementById('checkout-total').innerText}*`;
-
             window.open(`https://wa.me/51970338838?text=${encodeURIComponent(mensaje)}`, '_blank');
         }
 
-        // Filtros y Modal
         document.getElementById('buscador').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             document.querySelectorAll('.product-card').forEach(card => {
