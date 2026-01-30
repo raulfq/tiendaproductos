@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Catálogo Pro 2026</title>
+    <title>Catálogo Pro 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -27,7 +27,12 @@
             transition: opacity 0.4s ease-in-out;
             position: absolute;
         }   
-        
+        .product-card p.text-gray-500 {
+                display: -webkit-box;
+                -webkit-line-clamp: 2; /* Máximo 2 líneas de descripción */
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+         }
         .img-secondary { opacity: 0; }
         .img-container:hover .img-primary { opacity: 0; }
         .img-container:hover .img-secondary { opacity: 1; }
@@ -62,6 +67,72 @@
         .is-zoomed { transform: scale(1.8); cursor: zoom-out !important; }
         .thumb-active { border: 2px solid white; opacity: 1; transform: scale(1.1); }
         .modal-thumb { opacity: 0.5; transition: all 0.2s; }
+
+        /* Estilos para los controles de cantidad */
+        .cantidad-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+            padding: 0.25rem;
+        }
+        
+        .cantidad-btn {
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .cantidad-btn:hover {
+            background: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+        
+        .cantidad-input {
+            width: 3rem;
+            text-align: center;
+            font-weight: bold;
+            background: transparent;
+            border: none;
+            outline: none;
+        }
+
+        /* Selector de talla */
+        .talla-selector {
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+        
+        .talla-btn {
+            padding: 0.25rem 0.5rem;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .talla-btn:hover {
+            background: #f3f4f6;
+        }
+        
+        .talla-btn.selected {
+            background: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
     </style>
 </head>
 <body class="bg-gray-50 pb-24">
@@ -137,29 +208,53 @@
         let modoVendedorActivo = false;
 
         const ID_HOJA = '1Cu5wkwCx__JNME4vURExoTfc9eYrDZ1y0pcPqmVhIG8';
-        const URL_DATOS = `https://docs.google.com/spreadsheets/d/${ID_HOJA}/gviz/tq?tqx=out:json`;
+        const URL_DATOS = `https://docs.google.com/spreadsheets/d/${ID_HOJA}/gviz/tq?tqx=out=json`;
 
         window.onload = () => { cargarProductos(); };
 
-        function cargarProductos() {
-            fetch(URL_DATOS).then(res => res.text()).then(data => {
-                const json = JSON.parse(data.substr(47).slice(0, -2));
-                // ADECUACIÓN: Filtramos solo los "Disponibles" y ajustamos índices de columnas
-                window.catalogoGlobal = json.table.rows
-                    .filter(fila => fila.c[7] && fila.c[7].v === "Disponible")
-                    .map(fila => ({
-                        nombre: fila.c[1] ? fila.c[1].v : "Sin nombre",
-                        precio: fila.c[2] ? parseFloat(fila.c[2].v) : 0,
-                        talla: fila.c[3] ? fila.c[3].v : "S/T",
-                        img1: fila.c[4] ? fila.c[4].v : "https://via.placeholder.com/300",
-                        cat: fila.c[5] ? fila.c[5].v : "General",
-                        img2: (fila.c[6] && fila.c[6].v) ? fila.c[6].v : (fila.c[4] ? fila.c[4].v : "")
-                    }));
-
-                renderizarCatalogo(window.catalogoGlobal);
-                verificarUrlPedido();
-            });
+        function parsearTallas(tallaString) {
+            // Si el campo está vacío o es "S/T", retorna null (sin tallas)
+            if (!tallaString || tallaString.trim() === '' || tallaString.trim() === 'S/T') {
+                return null;
+            }
+            
+            // Separar las tallas por coma y limpiar espacios
+            const tallas = tallaString.split(',').map(t => t.trim()).filter(t => t !== '');
+            
+            // Si no hay tallas después de procesar, retornar null
+            return tallas.length > 0 ? tallas : null;
         }
+
+      function cargarProductos() {
+    fetch(URL_DATOS).then(res => res.text()).then(data => {
+        const json = JSON.parse(data.substr(47).slice(0, -2));
+        window.catalogoGlobal = json.table.rows
+            .filter(fila => fila.c[8] && fila.c[8].v === "Disponible") // Columna 8 es Estado
+            .map(fila => {
+                // Limpieza de precio: quita "S/", espacios y cambia coma por punto
+                let precioRaw = fila.c[3] ? fila.c[3].v.toString() : "0";
+                let precioLimpio = parseFloat(precioRaw.replace(/[^\d,.]/g, '').replace(',', '.'));
+
+                const tallaRaw = fila.c[4] ? fila.c[4].v : "S/T"; // Columna 4 es Talla
+                const tallasArray = parsearTallas(tallaRaw);
+                
+               // ... dentro del .map de cargarProductos
+                return {
+                    nombre: fila.c[1] ? fila.c[1].v : "Sin nombre",
+                    precio: precioLimpio,
+                    descripcion: fila.c[2] ? fila.c[2].v : "", // Captura la columna C
+                    tallaOriginal: tallaRaw,
+                    tallasDisponibles: tallasArray,
+                    img1: fila.c[5] ? fila.c[5].v : "https://via.placeholder.com/300",
+                    cat: fila.c[6] ? fila.c[6].v : "General",
+                    img2: (fila.c[7] && fila.c[7].v) ? fila.c[7].v : (fila.c[5] ? fila.c[5].v : "")
+                };
+            });
+
+        renderizarCatalogo(window.catalogoGlobal);
+        verificarUrlPedido();
+    });
+}
 
         function renderizarCatalogo(productos) {
             const contenedor = document.getElementById('productos');
@@ -167,10 +262,10 @@
             const categorias = new Set();
             contenedor.innerHTML = '';
 
-            productos.forEach(item => {
+            productos.forEach((item, idx) => {
                 categorias.add(item.cat);
                 
-                const textoDirecto = encodeURIComponent(`¡Hola! 👋 Me interesa comprar directamente:\n\n📌 *${item.nombre}*\n📏 *Talla:* ${item.talla}\n💰 *S/ ${item.precio}*\n🖼️ *Foto:* ${item.img1}`);
+                const textoDirecto = encodeURIComponent(`¡Hola! 👋 Me interesa comprar directamente:\n\n📌 *${item.nombre}*\n📏 *Talla:* ${item.tallaOriginal}\n💰 *S/ ${item.precio}*\n🖼️ *Foto:* ${item.img1}`);
                 const linkDirecto = `https://wa.me/51970338838?text=${textoDirecto}`;
 
                 const card = document.createElement('div');
@@ -184,19 +279,23 @@
                         <img src="${item.img2}" class="product-img img-secondary">
                         <div class="absolute top-3 left-3 flex flex-col gap-1">
                             <span class="bg-white/90 backdrop-blur text-gray-800 text-[10px] font-bold px-2 py-1 rounded-full uppercase border shadow-sm w-fit">${item.cat}</span>
-                            <span class="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase shadow-sm w-fit">Talla: ${item.talla}</span>
+                            ${item.tallaOriginal ? `<span class="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase shadow-sm w-fit">Talla: ${item.tallaOriginal}</span>` : ''}
                         </div>
                     </div>
                     <div class="p-3 flex flex-col flex-grow text-center">
                         <h2 class="font-bold text-gray-800 text-sm leading-tight h-10 overflow-hidden mb-1">${item.nombre}</h2>
-                        <p class="text-indigo-600 font-black text-xl mb-3">S/ ${item.precio.toFixed(2)}</p>
+                        <p class="text-indigo-600 font-black text-xl">S/ ${item.precio.toFixed(2)}</p>
+                        
+                        <p class="text-gray-500 text-[11px] leading-snug mt-1 mb-3 h-8 overflow-hidden italic">
+                            ${item.descripcion}
+                        </p>
                         
                         <div class="mt-auto flex gap-2">
                             <a href="${linkDirecto}" target="_blank" class="bg-green-100 text-green-700 py-2 px-3 rounded-lg flex-1 flex items-center justify-center hover:bg-green-200 transition-colors border border-green-200" title="Comprar directo">
                                 <i class="fa-brands fa-whatsapp text-xl"></i>
                             </a>
-                            <button onclick="agregarAlCarrito('${item.nombre}', ${item.precio}, '${item.img1}', this)" 
-                               class="bg-gray-900 text-white py-2 px-3 rounded-lg flex-[3] font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 transition-colors">
+                            <button onclick="agregarAlCarrito(${idx}, this)" 
+                            class="bg-gray-900 text-white py-2 px-3 rounded-lg flex-[3] font-bold text-xs uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 transition-colors">
                                 Añadir <i class="fa-solid fa-cart-plus"></i>
                             </button>
                         </div>
@@ -212,8 +311,22 @@
             }
         }
 
-        function agregarAlCarrito(nombre, precio, img, btn) {
-            carrito.push({ nombre, precio, img });
+        function agregarAlCarrito(productoIdx, btn) {
+            const producto = window.catalogoGlobal[productoIdx];
+            
+            // Si tiene tallas disponibles, usar la primera como predeterminada
+            const tallaInicial = producto.tallasDisponibles ? producto.tallasDisponibles[0] : null;
+            
+            carrito.push({ 
+                nombre: producto.nombre, 
+                precio: producto.precio, 
+                img: producto.img1,
+                talla: tallaInicial,
+                tallasDisponibles: producto.tallasDisponibles, // Guardamos las tallas disponibles
+                cantidad: 1,
+                categoria: producto.cat
+            });
+            
             actualizarContador();
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-check"></i>';
@@ -225,9 +338,11 @@
         }
 
         function actualizarContador() {
-            document.getElementById('cart-count').innerText = carrito.length;
+            const totalItems = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+            document.getElementById('cart-count').innerText = totalItems;
             const icon = document.getElementById('cart-count').parentElement;
-            icon.classList.add('scale-110'); setTimeout(() => icon.classList.remove('scale-110'), 200);
+            icon.classList.add('scale-110'); 
+            setTimeout(() => icon.classList.remove('scale-110'), 200);
         }
 
         function abrirCarritoUsuario() {
@@ -245,12 +360,16 @@
                 const rawData = params.get('pedido');
                 const clienteName = params.get('cliente');
                 itemsVistaVendedor = rawData.split(';;').map(i => {
-                    const [nom, pre] = i.split('|');
+                    const [nom, pre, tal, cant] = i.split('|');
                     const prodOriginal = window.catalogoGlobal.find(p => p.nombre === nom);
                     return { 
                         nombre: nom, 
                         precio: parseFloat(pre), 
-                        img: prodOriginal ? prodOriginal.img1 : 'https://via.placeholder.com/100?text=No+Img' 
+                        img: prodOriginal ? prodOriginal.img1 : 'https://via.placeholder.com/100?text=No+Img',
+                        talla: tal === 'null' ? null : tal,
+                        tallasDisponibles: prodOriginal ? prodOriginal.tallasDisponibles : null,
+                        cantidad: parseInt(cant) || 1,
+                        categoria: prodOriginal ? prodOriginal.cat : 'General'
                     };
                 });
                 modoVendedorActivo = true;
@@ -287,23 +406,84 @@
             const listado = document.getElementById('checkout-items');
             listado.innerHTML = '';
             let total = 0;
+            
             lista.forEach((prod, index) => {
-                total += prod.precio;
+                total += prod.precio * prod.cantidad;
+                
+                // Solo mostrar selector de tallas si el producto tiene tallas disponibles
+                let selectorTallas = '';
+                if (prod.tallasDisponibles && prod.tallasDisponibles.length > 0) {
+                    if (esEditable) {
+                        selectorTallas = `
+                            <div class="mb-2">
+                                <label class="text-xs text-gray-500 font-semibold mb-1 block">Talla:</label>
+                                <div class="talla-selector">
+                                    ${prod.tallasDisponibles.map(t => 
+                                        `<button onclick="cambiarTalla(${index}, '${t}')" 
+                                                 class="talla-btn ${prod.talla === t ? 'selected' : ''}">${t}</button>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        selectorTallas = `<p class="text-xs text-gray-500 mb-1"><strong>Talla:</strong> ${prod.talla}</p>`;
+                    }
+                }
+                
+                const controlCantidad = esEditable ? `
+                    <div class="cantidad-control">
+                        <button onclick="cambiarCantidad(${index}, -1)" class="cantidad-btn">
+                            <i class="fa-solid fa-minus text-xs"></i>
+                        </button>
+                        <input type="number" value="${prod.cantidad}" readonly class="cantidad-input">
+                        <button onclick="cambiarCantidad(${index}, 1)" class="cantidad-btn">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                ` : `<p class="text-xs text-gray-500"><strong>Cant:</strong> ${prod.cantidad}</p>`;
+                
                 const botonBorrar = esEditable 
                     ? `<button onclick="eliminarItem(${index})" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-full hover:bg-red-100"><i class="fa-solid fa-trash text-xs"></i></button>` 
                     : ``;
+                
                 listado.innerHTML += `
-                    <div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-                        <img src="${prod.img}" class="w-16 h-16 object-contain rounded bg-gray-50 border">
+                    <div class="flex gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                        <img src="${prod.img}" class="w-20 h-20 object-contain rounded bg-gray-50 border flex-shrink-0">
                         <div class="flex-grow">
-                            <p class="font-bold text-gray-800 text-sm leading-tight">${prod.nombre}</p>
-                            <p class="text-indigo-600 font-bold text-sm">S/ ${prod.precio.toFixed(2)}</p>
+                            <p class="font-bold text-gray-800 text-sm leading-tight mb-1">${prod.nombre}</p>
+                            <p class="text-indigo-600 font-bold text-sm mb-2">S/ ${prod.precio.toFixed(2)} c/u</p>
+                            ${selectorTallas}
+                            ${controlCantidad}
                         </div>
-                        ${botonBorrar}
+                        <div class="flex flex-col items-end justify-between">
+                            ${botonBorrar}
+                            <p class="text-gray-900 font-black text-lg">S/ ${(prod.precio * prod.cantidad).toFixed(2)}</p>
+                        </div>
                     </div>
                 `;
             });
+            
             document.getElementById('checkout-total').innerText = total.toFixed(2);
+        }
+
+        function cambiarTalla(index, nuevaTalla) {
+            if (!modoVendedorActivo) {
+                carrito[index].talla = nuevaTalla;
+                renderizarItems(carrito, true);
+            }
+        }
+
+        function cambiarCantidad(index, delta) {
+            if (!modoVendedorActivo) {
+                const nuevaCantidad = carrito[index].cantidad + delta;
+                if (nuevaCantidad > 0) {
+                    carrito[index].cantidad = nuevaCantidad;
+                    actualizarContador();
+                    renderizarItems(carrito, true);
+                } else if (nuevaCantidad === 0) {
+                    eliminarItem(index);
+                }
+            }
         }
 
         function eliminarItem(index) {
@@ -330,13 +510,27 @@
             const nombre = document.getElementById('cliente-nombre').value.trim();
             const direccion = document.getElementById('cliente-direccion').value.trim();
             if (!nombre || !direccion) return alert("Por favor completa tu Nombre y Dirección");
-            const dataPedido = carrito.map(p => `${p.nombre}|${p.precio}`).join(';;');
+            
+            // Formato: nombre|precio|talla|cantidad
+            const dataPedido = carrito.map(p => `${p.nombre}|${p.precio}|${p.talla}|${p.cantidad}`).join(';;');
             const baseUrl = window.location.href.split('?')[0];
             const linkVisual = `${baseUrl}?pedido=${encodeURIComponent(dataPedido)}&cliente=${encodeURIComponent(nombre)}`;
+            
             let mensaje = `*NUEVO PEDIDO - KLICK PRO* 🛍️\n\n👤 *Cliente:* ${nombre}\n📍 *Dirección:* ${direccion}\n`;
             mensaje += `--------------------------------\n🔗 *VER RESUMEN GRÁFICO (CLICK AQUÍ):* \n${linkVisual}\n--------------------------------\n\n`;
-            carrito.forEach((p, i) => mensaje += `✅ *${i + 1}.* ${p.nombre} (S/ ${p.precio.toFixed(2)})\n`);
-            mensaje += `\n⭐ *TOTAL: S/ ${document.getElementById('checkout-total').innerText}*`;
+            
+            carrito.forEach((p, i) => {
+                mensaje += `✅ *${i + 1}.* ${p.nombre}\n`;
+                // Solo mostrar talla si el producto tiene talla seleccionada
+                if (p.talla) {
+                    mensaje += `   📏 Talla: ${p.talla} | 🔢 Cantidad: ${p.cantidad}\n`;
+                } else {
+                    mensaje += `   🔢 Cantidad: ${p.cantidad}\n`;
+                }
+                mensaje += `   💰 S/ ${p.precio.toFixed(2)} c/u = S/ ${(p.precio * p.cantidad).toFixed(2)}\n\n`;
+            });
+            
+            mensaje += `⭐ *TOTAL: S/ ${document.getElementById('checkout-total').innerText}*`;
             window.open(`https://wa.me/51970338838?text=${encodeURIComponent(mensaje)}`, '_blank');
         }
 
